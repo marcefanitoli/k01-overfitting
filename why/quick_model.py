@@ -11,17 +11,17 @@ import os
 class quick_model():
 
     def __init__(self, test_size=.2):
+        self.sep = os.sep
         self.test_size = test_size
         self.__load__()
         self.__make_sets__()
-        self.sep = os.sep
 
     def __load__(self):
         #
         # Prepare the data
         #
 
-        train = pd.read_csv('train.csv')
+        train = pd.read_csv('..' + self.sep + 'train.csv')
         # get the labels
         self.inputY = train.target.values
         train.drop(['id', 'target'], inplace=True, axis=1)
@@ -56,7 +56,7 @@ class quick_model():
         # Create a submission
         #
 
-        submission = pd.read_csv('test.csv')
+        submission = pd.read_csv('..' + self.sep + 'test.csv')
         ids = submission['id'].values
         submission.drop('id', inplace=True, axis=1)
 

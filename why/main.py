@@ -28,5 +28,5 @@ for min_data_in_leaf_value in min_data_in_leaf_valid_values:
             parameters["num_leaves"] = num_leaves_value
             parameters["max_depth"] = max_depth_value
             parameters["min_data_in_leaf"] = min_data_in_leaf_value
-            # run model
+            # run model (set save_graph to false if you don't have dot)
             _ = model.run_model(num_boost_round=5000, early_stopping_rounds=100, parameters=parameters, save_graph=True)
