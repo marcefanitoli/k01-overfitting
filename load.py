@@ -1,19 +1,61 @@
 import numpy as np
 import math
 import os
+import pandas as pd
 from sklearn import preprocessing
 from sklearn import cluster
 
 class DataWorker(object):
     def __init__(self):
+        """ Load and process training and test data
+        
+        Should have .csv files in the directory this is initialized. 
+        
+        i.e.
+        
+        dw = DataWorker()
+        
+        dw.train #training data
+        dw.target #known results for training data
+        dw.test #test inputs
+        
+        # return all training data
+        x,y, test = dw.get_production_set() 
+        
+        # small random set for debugging
+        x,y, test = dw.get_debug_set() 
+        
+        # get a regularized training and test set
+        x,y, test = dw.get_normalized_production_set() 
+        
+        # print out the number and fraction of predictions in each class
+        dw.print_fraction_predictions(predictions)
+        
+        # output to a file called submission.csv
+        dw.output_results(y_submit, savename="submission.csv")
+             
+        """
         self.cwd = os.getcwd()
-        self.training = np.load("%s/data/train_inputs.npy" % self.cwd)
-        self.targets = np.load("%s/data/train_targets.npy" % self.cwd)
-        self.tests = np.load("%s/data/test_inputs.npy" % self.cwd)
+        train = pd.read_csv('train.csv')
 
-        self.n_training, self.n_inputs = np.shape(self.training)
-        self.n_tests = np.shape(self.tests)[0]
-        self.training_sets = None
+        # get the labels
+        y = train.target.values
+        train.drop(['id', 'target'], inplace=True, axis=1)
+
+        x = train.values
+        
+        submission = pd.read_csv('test.csv')
+        ids = submission['id'].values
+        submission.drop('id', inplace=True, axis=1)
+        
+        self.train = x
+        self.target = y
+        self.test = submission
+        self.ids = ids
+
+        self.n_train, self.n_inputs = np.shape(self.train)
+        self.n_test = np.shape(self.test)[0]
+        self.train_sets = None
 
     def find_number_classified(self, results):
         """ Outputs the ratio of 1 to 0 from classifcation """
@@ -22,72 +64,44 @@ class DataWorker(object):
         n_ones = np.shape(np.where(results == 1))[1]
 
         return n_zeros, n_ones
+        
+    def print_fraction_predictions(self, results):
+        zeros, ones = self.find_number_classified(results)
+        total = zeros + ones
+        
+        print("Classified as zero: %d, %f\n Classified as one: %d, %f" % (zeros, zeros/total, ones, ones/total))
 
     def get_normalized_production_set(self):
         """ Return a mean centered and variance normalized data training set """
-        new_training = preprocessing.scale(self.training)
-        new_tests = preprocessing.scale(self.tests)
+        new_training = preprocessing.scale(self.train)
+        new_tests = preprocessing.scale(self.test)
 
-        return new_training, self.targets, new_tests
+        return new_training, self.target, new_tests
 
     def get_production_set(self):
         """ Return full training, target and test sets """
 
-        return self.training, self.targets, self.tests
+        return self.train, self.target, self.test
 
     def get_debug_set(self, n_mini=100):
         """ Get a mini set of test and targets for debugging purposes """
-        indices = np.random.choice(self.n_training, size=n_mini)
-        new_training_inputs = self.training[indices,:]
-        new_training_targets = self.targets[indices]
+        
+        # ERROR: broken because of pandas slicing, works with numpy array
+        indices = np.random.choice(self.n_train, size=n_mini)
+        new_training_inputs = self.train[indices,:]
+        new_training_targets = self.target[indices]
 
-        indices = np.random.choice(self.n_tests, size=n_mini)
-        new_test_inputs = self.tests[indices, :]
+        indices = np.random.choice(self.n_test, size=n_mini)
+        new_test_inputs = self.test[indices, :]
 
         return new_training_inputs, new_training_targets, new_test_inputs
 
-    def get_debug_set_weighted(self, n_mini=100):
-        """ Get a mini set of test and targets for debugging purposes """
-        indices = np.random.choice(self.n_training, size=n_mini)
-        new_training_inputs = self.training[indices,:]
-        new_training_targets = self.targets[indices]
-
-        indices = np.random.choice(self.n_tests, size=n_mini)
-        new_test_inputs = self.tests[indices, :]
-
-        return new_training_inputs, new_training_targets, new_test_inputs, np.ones(n_mini)
-
-    def split_training_into_random_sets(self, n_sets):
-        random_indices = np.random.choice(self.n_training, size = self.n_training, replace=False).astype(int) #all the data indices in a random order
-
-        all_training_sets = []
-        all_target_sets = []
-        total_size_of_sets = 0
-        spacing = math.floor(self.n_training / n_sets)
-        for i in range(n_sets):
-            if i == n_sets - 1:
-                # this is the last set, include remainder
-                these_indices = random_indices[i*spacing:]
-            else:
-                # not the last set, include set of size spacing
-                these_indices = random_indices[i * spacing : (i+1)*spacing]
-
-            this_training_set = self.training[these_indices,:]
-            this_targets = self.targets[these_indices]
-
-            assert np.shape(this_training_set)[0] == np.shape(this_targets)[0] # the right size
-            assert np.shape(this_training_set)[1] == self.n_inputs # right number of input dimensions
-            total_size_of_sets += np.shape(this_training_set)[0]
-            all_training_sets.append(this_training_set)
-            all_target_sets.append(this_targets)
-
-        assert total_size_of_sets == self.n_training
-        return all_training_sets, all_target_sets
-
-    def output_results(self, results, savename="submission.csv"):
+    def output_results(self, y_submit, savename="submission.csv"):
         """ Prepare submission file given results"""
-        f = open(savename, "w")
-        f.write("id,target\n")
-        for i in range(self.n_tests):
-            f.write("%d,%d\n" % (i, results[i]))
-        f.close()
+        
+        self.print_fraction_predictions(y_submit)
+        if np.shape(y_submit)[0] != self.n_test:
+            raise IOError("Number of submitted predictions is incorrect. Got size %d, expected size %d" % (np.shape(y_submit)[0], self.n_test))
+        output = pd.DataFrame({'id': self.ids, 'target': y_submit})
+        output.to_csv(savename, index=False)
+        
