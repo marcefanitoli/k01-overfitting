@@ -9,76 +9,82 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelBinarizer#
 # Prepare the data
 #
-num_leaves_valid_values=[2]
-max_depth_valid_values=[2]
+num_leaves_valid_values=[2,4,6,8]
+max_depth_valid_values=[2,3,4,5]
+min_data_in_leaf_valid_values=[3,5,8,13,21]
 
-for max_depth_value in max_depth_valid_values:  
-    for num_leaves_value in num_leaves_valid_values: 
+for min_data_in_leaf_value in min_data_in_leaf_valid_values:
+    for max_depth_value in max_depth_valid_values:  
+        for num_leaves_value in num_leaves_valid_values: 
 
-        train = pd.read_csv('train.csv')
+            train = pd.read_csv('train.csv')
 
-        # get the labels
-        y = train.target.values
-        train.drop(['id', 'target'], inplace=True, axis=1)
+            # get the labels
+            y = train.target.values
+            train.drop(['id', 'target'], inplace=True, axis=1)
 
-        x = train.values
+            x = train.values
 
-        #
-        # Create training and validation sets
-        #
-        x, x_test, y, y_test = train_test_split(x, y, test_size=.2, random_state=42, stratify=y)
+            #
+            # Create training and validation sets
+            #
+            x, x_test, y, y_test = train_test_split(x, y, test_size=.2, random_state=42, stratify=y)
 
-        #
-        # Create the LightGBM data containers
-        #
-        categorical_features = [c for c, col in enumerate(train.columns) if 'cat' in col]
-        train_data = lightgbm.Dataset(x, label=y, categorical_feature=categorical_features)
-        test_data = lightgbm.Dataset(x_test, label=y_test)
+            #
+            # Create the LightGBM data containers
+            #
+            categorical_features = [c for c, col in enumerate(train.columns) if 'cat' in col]
+            train_data = lightgbm.Dataset(x, label=y)
+            #if you have categorical variables, use this:
+            #train_data = lightgbm.Dataset(x, label=y, categorical_feature=categorical_features)
 
-
-        #
-        # Train the model
-        #
-        myoutput={}
-
-        parameters = {
-            'application': 'binary',
-            'objective': 'binary',
-            'metric': 'auc',
-            'is_unbalance': 'true',
-            'boosting': 'gbdt',
-            'num_leaves': num_leaves_value,
-            'feature_fraction': 0.5,
-            'bagging_fraction': 0.5,
-            'bagging_freq': 20,
-            'learning_rate': 0.05,
-            'verbose': 0,
-            'max_depth':max_depth_value,
-            #'min_data_in_leaf':5
-        }
-
-        model = lightgbm.train(parameters,
-                               train_data,
-                               verbose_eval=False,
-                               evals_result=myoutput,
-                               valid_sets=test_data,
-                               num_boost_round=5000,
-                               early_stopping_rounds=100)
-        #
-        # Create a submission
-        #
-
-        submission = pd.read_csv('test.csv')
-        ids = submission['id'].values
-        submission.drop('id', inplace=True, axis=1)
+            test_data = lightgbm.Dataset(x_test, label=y_test)
 
 
-        x = submission.values
-        y = model.predict(x)
+            #
+            # Train the model
+            #
+            myoutput={}
 
-        output = pd.DataFrame({'id': ids, 'target': y})
+            parameters = {
+                'application': 'binary',
+                'objective': 'binary',
+                'metric': 'auc',
+                'is_unbalance': 'true',
+                'boosting': 'gbdt',
+                'feature_fraction': 0.5,
+                'bagging_fraction': 0.5,
+                'bagging_freq': 20,
+                'learning_rate': 0.05,
+                'verbose': -1,
+                'verbosity':-1,
 
-        output.to_csv("submission.csv", index=False)
-        print(num_leaves_value) 
-        print(max_depth_value)
-        print(max(myoutput['valid_0']['auc']))
+                'num_leaves': num_leaves_value,
+                'max_depth':max_depth_value,
+                'min_data_in_leaf':min_data_in_leaf_value
+            }
+
+            model = lightgbm.train(parameters,
+                                   train_data,
+                                   verbose_eval=False,
+                                   evals_result=myoutput,
+                                   valid_sets=test_data,
+                                   num_boost_round=5000,
+                                   early_stopping_rounds=100)
+            #
+            # Create a submission
+            #
+
+            submission = pd.read_csv('test.csv')
+            ids = submission['id'].values
+            submission.drop('id', inplace=True, axis=1)
+
+
+            x = submission.values
+            y = model.predict(x)
+            binY = [round(i) for i in y]
+            output = pd.DataFrame({'id': ids, 'target': binY})
+
+            output.to_csv("submission.csv", index=False)
+                          
+            print(min_data_in_leaf_value,max_depth_value,num_leaves_value,max(myoutput['valid_0']['auc']))
